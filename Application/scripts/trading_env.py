@@ -31,55 +31,52 @@ class TradingEnvironment(gym.Env):
         state = self.data.iloc[self.current_step].drop(labels=["datetime"]).values.astype(float)
         return np.append(state, [self.balance, self.position])
 
+    def step(self, action):
+        if self.done:
+            raise RuntimeError("Episode has ended. Call reset to start a new episode.")
 
+        # Get current price
+        current_price = self.data.iloc[self.current_step]["close"]
 
-def step(self, action):
-    if self.done:
-        raise RuntimeError("Episode has ended. Call reset to start a new episode.")
+        # Apply action
+        if action == 1:  # Buy
+            max_shares = self.balance // current_price
+            self.position += max_shares
+            self.balance -= max_shares * current_price
 
-    # Get current price
-    current_price = self.data.iloc[self.current_step]["close"]
+        elif action == 2:  # Sell
+            self.balance += self.position * current_price
+            self.position = 0
 
-    # Apply action
-    if action == 1:  # Buy
-        max_shares = self.balance // current_price
-        self.position += max_shares
-        self.balance -= max_shares * current_price
+        # Update portfolio value
+        self.total_value = self.balance + self.position * current_price
 
-    elif action == 2:  # Sell
-        self.balance += self.position * current_price
-        self.position = 0
+        # Compute reward
+        reward = self.total_value - self.initial_balance
 
-    # Update portfolio value
-    self.total_value = self.balance + self.position * current_price
+        # Add penalties/rewards based on indicators
+        if self.data.iloc[self.current_step]["doji"]:
+            reward -= 5  # Penalize trading during doji
+        if self.data.iloc[self.current_step]["hammer"]:
+            reward += 5  # Reward trading on hammer signal
+        if self.data.iloc[self.current_step]["engulfing"]:
+            reward += 10  # Reward trading on engulfing signal
+        if action == 1 and current_price < self.data.iloc[self.current_step]["vwap"]:
+            reward += 10  # Reward buying below VWAP
+        elif action == 2 and current_price > self.data.iloc[self.current_step]["vwap"]:
+            reward += 10  # Reward selling above VWAP
 
-    # Compute reward
-    reward = self.total_value - self.initial_balance
+        # Advance to the next step
+        self.current_step += 1
+        if self.current_step >= len(self.data) - 1:
+            self.done = True
 
-    # Add penalties/rewards based on indicators
-    if self.data.iloc[self.current_step]["doji"]:
-        reward -= 5  # Penalize trading during doji
-    if self.data.iloc[self.current_step]["hammer"]:
-        reward += 5  # Reward trading on hammer signal
-    if self.data.iloc[self.current_step]["engulfing"]:
-        reward += 10  # Reward trading on engulfing signal
-    if action == 1 and current_price < self.data.iloc[self.current_step]["vwap"]:
-        reward += 10  # Reward buying below VWAP
-    elif action == 2 and current_price > self.data.iloc[self.current_step]["vwap"]:
-        reward += 10  # Reward selling above VWAP
+        # Get next state
+        next_state = self._get_observation()
 
-    # Advance to the next step
-    self.current_step += 1
-    if self.current_step >= len(self.data) - 1:
-        self.done = True
+        return next_state, reward, self.done, {}
 
-    # Get next state
-    next_state = self._get_observation()
-
-    return next_state, reward, self.done, {}
-
-
-def render(self, mode="human"):
+    def render(self, mode="human"):
         print(
             f"Step: {self.current_step}, Balance: {self.balance}, "
             f"Position: {self.position}, Total Value: {self.total_value}"

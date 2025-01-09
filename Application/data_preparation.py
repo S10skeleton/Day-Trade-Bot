@@ -1,3 +1,7 @@
+# Updated and Corrected Files
+
+## data_preparation.py
+
 import sqlite3
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -10,7 +14,7 @@ DATABASE_PATH = "data/intraday_data.db"
 def load_data(symbol):
     conn = sqlite3.connect(DATABASE_PATH)
     query = f"""
-        SELECT datetime, close, ema_8, ema_21, ema_50, rsi_14, macd, macd_signal
+        SELECT datetime, close, ema_8, ema_21, ema_50, rsi_14, macd, macd_signal, doji, hammer, engulfing, vwap
         FROM intraday_data
         WHERE symbol = '{symbol}'
         ORDER BY datetime ASC
@@ -19,17 +23,23 @@ def load_data(symbol):
     conn.close()
 
     # Ensure no missing values
-    df.dropna(inplace=True)
+    df.dropna(subset=["ema_8", "ema_21", "ema_50", "rsi_14", "macd", "macd_signal"], inplace=True)
 
-    # Convert datetime to a usable format (optional)
+
+    # Convert datetime to a usable format
     df["datetime"] = pd.to_datetime(df["datetime"])
 
     return df
 
 # Prepare data for training
 def prepare_data(df):
+    required_columns = ["ema_8", "ema_21", "ema_50", "rsi_14", "macd", "macd_signal", "doji", "hammer", "engulfing", "vwap"]
+    missing_cols = [col for col in required_columns if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required columns in data: {missing_cols}")
+
     # Features and labels
-    X = df[["ema_8", "ema_21", "ema_50", "rsi_14", "macd", "macd_signal", "doji", "hammer", "engulfing", "vwap"]]
+    X = df[required_columns]
     y = df["close"].pct_change().apply(lambda x: 1 if x > 0 else -1 if x < 0 else 0)  # Buy (1), Sell (-1), Hold (0)
 
     # Drop the first row (NaN from pct_change)

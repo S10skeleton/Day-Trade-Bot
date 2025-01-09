@@ -123,7 +123,7 @@ def compute_indicators(symbol):
     df['high'] = pd.to_numeric(df['high'], errors='coerce')
     df['low'] = pd.to_numeric(df['low'], errors='coerce')
     df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
-    df.dropna(inplace=True)  # Remove rows with NaN values
+    df.dropna(inplace=True)
 
     # Compute EMAs
     df['ema_8'] = df['close'].ewm(span=8, adjust=False).mean()
@@ -132,8 +132,8 @@ def compute_indicators(symbol):
 
     # Compute RSI
     delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+    loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
     rs = gain / loss
     df['rsi_14'] = 100 - (100 / (1 + rs))
 
@@ -149,20 +149,27 @@ def compute_indicators(symbol):
     # Compute VWAP
     df = compute_vwap(df)
 
-    # Update the database with computed indicators and patterns
+    print("Indicators computed for:", symbol)
+    print(df[["datetime", "ema_8", "ema_21", "ema_50", "rsi_14", "macd", "macd_signal", "doji", "hammer", "engulfing", "vwap"]].head())
+
+    # Update database
     for _, row in df.iterrows():
-        cursor.execute("""
-            UPDATE intraday_data
-            SET ema_8 = ?, ema_21 = ?, ema_50 = ?, rsi_14 = ?, macd = ?, macd_signal = ?, doji = ?, hammer = ?, engulfing = ?, vwap = ?
-            WHERE symbol = ? AND datetime = ?
-        """, (
-            row['ema_8'], row['ema_21'], row['ema_50'], row['rsi_14'], row['macd'], row['macd_signal'],
-            int(row['doji']), int(row['hammer']), int(row['engulfing']), row['vwap'],
-            symbol, row['datetime']
-        ))
+        try:
+            cursor.execute("""
+                UPDATE intraday_data
+                SET ema_8 = ?, ema_21 = ?, ema_50 = ?, rsi_14 = ?, macd = ?, macd_signal = ?, doji = ?, hammer = ?, engulfing = ?, vwap = ?
+                WHERE symbol = ? AND datetime = ?
+            """, (
+                row['ema_8'], row['ema_21'], row['ema_50'], row['rsi_14'], row['macd'], row['macd_signal'],
+                int(row['doji']), int(row['hammer']), int(row['engulfing']), row['vwap'],
+                symbol, row['datetime']
+            ))
+        except Exception as e:
+            print(f"Error updating {symbol} at {row['datetime']}: {e}")
 
     conn.commit()
     conn.close()
+
 
 def compute_candlestick_patterns(df):
     df['doji'] = (abs(df['open'] - df['close']) / (df['high'] - df['low'])) < 0.1
