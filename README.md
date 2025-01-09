@@ -52,21 +52,27 @@ Copy code
 ### Step 1: Fetch Stock Data
 Run `data_fetch.py` to download intraday data and compute indicators:
 
+```bash
 python scripts/data_fetch.py
+```
 ### Step 2: Prepare Data
 Clean and prepare the fetched data for training:
 
+```bash
 python scripts/data_preparation.py
+```
 ### Step 3: Train and Test the Model
 Train the PPO model and simulate trading:
 
+```bash
 python test_ppo.py
-
+```
 ### Step 4: Verify Data
 Ensure indicators are computed and available:
 
+```bash
 python test.py
-
+```
 
 ## Planned Features
 Real-Time Integration:
