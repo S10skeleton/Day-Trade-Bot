@@ -99,5 +99,5 @@ class TradingEnvironment(gym.Env):
     def render(self, mode="human"):
         print(
             f"Step: {self.current_step}, Balance: {self.balance}, "
-            f"Position: {self.position}, Total Value: {self.total_value}"
+            f"Position: {self.positions}, Total Value: {self.total_value}"
         )

@@ -41,15 +41,20 @@ else:
         "MlpPolicy",
         env,
         verbose=1,
-        device="cuda",  # Force GPU usage
+        device="cpu",  # Force GPU usage
         learning_rate=0.0001,
-        n_steps=2048,
+        n_steps=4096,  # Increase rollout steps
+        batch_size=256,  # Larger batch size
         gamma=0.99,
         tensorboard_log="./ppo_tensorboard/"
     )
 
 # Train PPO
-model.learn(total_timesteps=100000)
+model.learn(
+    total_timesteps=100000,
+    tb_log_name="PPO_run"
+)
+
 model.save("ppo_day_trade_bot")
 print("Model saved as ppo_day_trade_bot.zip")
 
@@ -92,7 +97,7 @@ with open("trade_log.txt", "w") as log:
         steps.append(step)
 
         # Debugging
-        print(f"Step: {step}, Actions: {action}, Buy Count: {buy_count}, Sell Count: {sell_count}")
+        # print(f"Step: {step}, Actions: {action}, Buy Count: {buy_count}, Sell Count: {sell_count}")
 
         # Write to text-based log
         log.write(f"{step},{action},{env.data.iloc[env.current_step]['close']},{env.total_value}\n")
