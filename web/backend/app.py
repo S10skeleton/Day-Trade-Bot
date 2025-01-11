@@ -102,6 +102,13 @@ def get_portfolio():
         return jsonify(portfolio)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/tensorboard', methods=['GET'])
+def serve_tensorboard():
+    """Serve TensorBoard iframe link."""
+    tensorboard_url = "http://localhost:6006"  # Adjust if TensorBoard runs on a different host/port
+    return jsonify({"url": tensorboard_url})
+
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -56,3 +56,14 @@ export const getPortfolio = async () => {
         throw error;
     }
 };
+
+// Fetch TensorBoard URL
+export const getTensorBoardUrl = async () => {
+    try {
+        const response = await axios.get(`${API_BASE}/tensorboard`);
+        return response.data.url;
+    } catch (error) {
+        console.error("Error fetching TensorBoard URL:", error.message);
+        throw error;
+    }
+};

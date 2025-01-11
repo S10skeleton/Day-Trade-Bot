@@ -53,10 +53,10 @@ def train_model(env):
             n_steps=4096,  # Increase rollout steps
             batch_size=256,  # Larger batch size
             gamma=0.99,
-            tensorboard_log="./ppo_tensorboard/"
+            tensorboard_log=os.path.abspath("./Application/ppo_tensorboard/")  # Unified directory
         )
     print("Starting training...")
-    model.learn(total_timesteps=100000, tb_log_name="PPO_run")
+    model.learn(total_timesteps=1000, tb_log_name="PPO_run")
     model.save(MODEL_FILE)
     print("Training complete. Model saved as ppo_day_trade_bot.zip")
     return model
