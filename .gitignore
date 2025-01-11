@@ -1,9 +1,19 @@
-.env
-/data/
+# Ignore tensor files
+*.pth
+*.pt
+*.ckpt
 
+# Ignore specific directories
+models/
+checkpoints/
+
+# Ignore Python cache files
 __pycache__/
 *.pyc
-*.pyo
 
-.vscode/
-.idea/
+# Ignore virtual environments
+env/
+venv/
+
+# Ignore environment files
+*.env
