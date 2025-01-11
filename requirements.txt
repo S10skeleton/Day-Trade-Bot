@@ -1,0 +1,33 @@
+# Flask for the backend server
+Flask==2.2.5
+Flask-Cors==3.0.10
+
+# Libraries for data fetching, processing, and trading environment
+pandas==2.2.3
+numpy==1.26.4
+scikit-learn==1.3.1
+matplotlib==3.8.0
+plotly==5.16.1
+requests==2.31.0
+
+# Reinforcement Learning with Stable-Baselines3
+stable-baselines3==1.8.0
+torch==2.0.0  # Ensure GPU-compatible version matches CUDA setup
+gym==0.26.2
+gym-notices==0.0.8
+shimmy==2.0.0
+
+# TensorBoard for visualizing training metrics
+tensorboard==2.18.0
+
+# Frontend integration and API interactions
+flask-restful==0.3.9
+axios==1.5.0  # For frontend API communication
+
+# Miscellaneous utilities
+python-dotenv==1.0.0
+scipy==1.11.2
+
+# Testing and development
+pytest==7.4.2
+pytest-flask==1.2.0

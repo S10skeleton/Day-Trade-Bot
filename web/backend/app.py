@@ -1,16 +1,17 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS  # Import Flask-CORS
 import os
 import subprocess
 import pandas as pd
 
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
 
 # Paths
 APPLICATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../application'))
 TICKERS_FILE = os.path.join(APPLICATION_DIR, 'tickers.csv')
-TRADE_LOG = os.path.join(APPLICATION_DIR, 'trade_log.txt')
+TRADE_LOG = os.path.abspath(os.path.join(os.path.dirname(__file__), 'trade_log.txt'))
 
 # Routes...
 
@@ -69,6 +70,74 @@ def manage_stocks():
             return jsonify({"message": f"Stock {symbol} removed."})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+        
+@app.route('/action-logs', methods=['GET'])
+def get_action_logs():
+    """Fetch logs from actions_log.csv, converting from trade_log.txt if necessary."""
+    ACTION_LOG = os.path.join(APPLICATION_DIR, 'actions_log.csv')
+    TRADE_LOG = os.path.join(APPLICATION_DIR, 'trade_log.txt')
+
+    # Convert trade_log.txt to actions_log.csv if missing
+    if not os.path.exists(ACTION_LOG):
+        if os.path.exists(TRADE_LOG):
+            try:
+                with open(TRADE_LOG, "r") as infile, open(ACTION_LOG, "w", newline="") as outfile:
+                    reader = pd.read_csv(infile)
+                    writer = pd.DataFrame(reader)
+                    writer.to_csv(outfile, index=False)
+            except Exception as e:
+                return jsonify({"error": f"Failed to convert trade_log.txt to actions_log.csv: {e}"}), 500
+        else:
+            return jsonify([])  # No logs available
+
+    # Read and return the actions_log.csv
+    try:
+        logs = []
+        with open(ACTION_LOG, "r") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                logs.append({
+                    "timestamp": row.get("Step", ""),
+                    "action": row.get("Action", ""),
+                    "price": float(row.get("Price", 0)),
+                    "value": float(row.get("Portfolio Value", 0)),
+                })
+        return jsonify(logs)
+    except Exception as e:
+        return jsonify({"error": f"Error reading actions_log.csv: {e}"}), 500
+
+
+
+
+
+
+@app.route('/stream-logs', methods=['GET'])
+def stream_logs():
+    """Stream training logs to the frontend."""
+    def generate():
+        process = subprocess.Popen(
+            ["python", os.path.join(APPLICATION_DIR, "test_ppo.py")],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        try:
+            for line in process.stdout:
+                yield f"data:{line}\n\n"
+            for line in process.stderr:
+                yield f"data:{line}\n\n"
+        except GeneratorExit:
+            process.terminate()
+            print("Client disconnected from stream.")
+    
+    response = Response(generate(), mimetype='text/event-stream')
+    # Add CORS headers explicitly
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    response.headers.add("Access-Control-Allow-Methods", "GET")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+    return response
+
+
 
 # Trigger Training
 @app.route('/train', methods=['POST'])

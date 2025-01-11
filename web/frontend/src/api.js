@@ -67,3 +67,19 @@ export const getTensorBoardUrl = async () => {
         throw error;
     }
 };
+
+// Example for the /stream-logs endpoint
+export const fetchLogs = async () => {
+    try {
+        const response = await fetch(`${API_BASE}/stream-logs`, {
+            method: "GET",
+            headers: {
+                "Accept": "text/event-stream",
+            },
+        });
+        return response.body;
+    } catch (error) {
+        console.error("Error fetching stream logs:", error.message);
+        throw error;
+    }
+};
