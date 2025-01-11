@@ -14,7 +14,7 @@ DATABASE_PATH = "data/intraday_data.db"
 def load_data(symbol):
     conn = sqlite3.connect(DATABASE_PATH)
     query = f"""
-        SELECT datetime, close, ema_8, ema_21, ema_50, rsi_14, macd, macd_signal, doji, hammer, engulfing, vwap
+        SELECT symbol, datetime, close, ema_8, ema_21, ema_50, rsi_14, macd, macd_signal, doji, hammer, engulfing, vwap
         FROM intraday_data
         WHERE symbol = '{symbol}'
         ORDER BY datetime ASC
@@ -25,11 +25,11 @@ def load_data(symbol):
     # Ensure no missing values
     df.dropna(subset=["ema_8", "ema_21", "ema_50", "rsi_14", "macd", "macd_signal"], inplace=True)
 
-
     # Convert datetime to a usable format
     df["datetime"] = pd.to_datetime(df["datetime"])
 
     return df
+
 
 # Prepare data for training
 def prepare_data(df):
@@ -63,13 +63,21 @@ def save_to_csv(df, filename="prepared_data.csv"):
     print(f"Data saved to {filename}.")
 
 if __name__ == "__main__":
-    symbol = "MSFT"  # Example symbol
-    print(f"Loading data for {symbol}...")
-    df = load_data(symbol)
+    tickers_csv_path = "tickers.csv"
+    tickers_df = pd.read_csv(tickers_csv_path)
+    stock_symbols = tickers_df["Symbol"].dropna().tolist()
 
-    # Save the raw data with indicators for inspection or use
-    save_to_csv(df)
+    all_data = []
 
-    print("Preparing data for training...")
-    X_train, X_test, y_train, y_test, scaler = prepare_data(df)
+    for symbol in stock_symbols:
+        print(f"Loading data for {symbol}...")
+        df = load_data(symbol)
+        all_data.append(df)
+
+    # Combine data for all stocks into one DataFrame
+    combined_data = pd.concat(all_data, ignore_index=True)
+
+    # Save the combined dataset to CSV
+    save_to_csv(combined_data)
+
     print("Data preparation complete.")

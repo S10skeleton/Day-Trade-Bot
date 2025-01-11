@@ -11,31 +11,55 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import csv
 
+# Load stock symbols from tickers.csv
+tickers_csv_path = os.path.join(os.path.dirname(__file__), "tickers.csv")
+tickers_df = pd.read_csv(tickers_csv_path)
+stock_symbols = tickers_df["Symbol"].dropna().tolist()
+
+if not stock_symbols:
+    raise ValueError("No stock symbols found in tickers.csv.")
+
 # Load prepared data
 data = pd.read_csv("prepared_data.csv")
 
-# Ensure required columns exist
-required_columns = ["ema_8", "ema_21", "ema_50", "rsi_14", "macd", "macd_signal", "doji", "hammer", "engulfing", "vwap", "close"]
-missing_cols = [col for col in required_columns if col not in data.columns]
-if missing_cols:
-    raise ValueError(f"Missing required columns in prepared_data.csv: {missing_cols}")
+# Filter data for the stocks listed in tickers.csv
+data = data[data["symbol"].isin(stock_symbols)]
+
+if data.empty:
+    raise ValueError("No data available for the stocks listed in tickers.csv.")
 
 # Create the custom trading environment
-env = TradingEnvironment(data)
+env = TradingEnvironment(data, stocks=stock_symbols)
 
-# Initialize PPO with optimized hyperparameters
-model = PPO(
-    "MlpPolicy",
-    env,
-    verbose=1,           # Display training progress
-    learning_rate=0.0001, # Fine-grained learning
-    n_steps=2048,         # Smaller batch size for quicker updates
-    gamma=0.99,           # Balance short-term and long-term rewards
-    tensorboard_log="./ppo_tensorboard/"  # Enable logging for TensorBoard
-)
+# Check if a saved model exists
+if os.path.exists("ppo_day_trade_bot.zip"):
+    print("Loading existing model...")
+    model = PPO.load("ppo_day_trade_bot", env=env)
+else:
+    print("No saved model found. Creating a new model...")
+    model = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        device="cuda",  # Force GPU usage
+        learning_rate=0.0001,
+        n_steps=2048,
+        gamma=0.99,
+        tensorboard_log="./ppo_tensorboard/"
+    )
 
 # Train PPO
-model.learn(total_timesteps=100000)  # Increased timesteps for better training
+model.learn(total_timesteps=100000)
+model.save("ppo_day_trade_bot")
+print("Model saved as ppo_day_trade_bot.zip")
+
+# Testing phase and visualization (unchanged)
+
+
+# Testing Phase
+# Initialize counters for Buy and Sell actions
+buy_count = 0
+sell_count = 0
 
 # Testing Phase
 portfolio_values = []
@@ -54,11 +78,21 @@ with open("trade_log.txt", "w") as log:
         action, _states = model.predict(obs)
         obs, reward, done, info = env.step(action)
 
+        # Increment counters for Buy (1) and Sell (2) actions
+        for i, stock_action in enumerate(action):  # Iterate through actions for each stock
+            if stock_action == 1:
+                buy_count += 1
+            elif stock_action == 2:
+                sell_count += 1
+
+
         # Log data
-        actions.append(action)
         portfolio_values.append(env.total_value)
         prices.append(env.data.iloc[env.current_step]["close"])
         steps.append(step)
+
+        # Debugging
+        print(f"Step: {step}, Actions: {action}, Buy Count: {buy_count}, Sell Count: {sell_count}")
 
         # Write to text-based log
         log.write(f"{step},{action},{env.data.iloc[env.current_step]['close']},{env.total_value}\n")
@@ -85,6 +119,8 @@ real_world_days = real_world_hours / 24
 
 print(f"\nReal-world time for the simulation: {real_world_minutes} minutes")
 print(f"Equivalent to {real_world_hours:.2f} hours or {real_world_days:.2f} days\n")
+print(f"Total Buy actions: {buy_count}")
+print(f"Total Sell actions: {sell_count}")
 
 # Plot portfolio value and actions
 plt.figure(figsize=(12, 6))
@@ -96,3 +132,4 @@ plt.ylabel("Portfolio Value")
 plt.legend()
 plt.grid()
 plt.show()
+
