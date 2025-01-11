@@ -32,30 +32,19 @@ def ensure_table_exists():
             low REAL,
             close REAL,
             volume INTEGER,
+            ema_8 REAL,
+            ema_21 REAL,
+            ema_50 REAL,
+            rsi_14 REAL,
+            macd REAL,
+            macd_signal REAL,
+            doji INTEGER,
+            hammer INTEGER,
+            engulfing INTEGER,
+            vwap REAL,
             UNIQUE(symbol, datetime)
         )
     """)
-
-    # Ensure required columns for indicators exist
-    columns = {
-        "ema_8": "REAL",
-        "ema_21": "REAL",
-        "ema_50": "REAL",
-        "rsi_14": "REAL",
-        "macd": "REAL",
-        "macd_signal": "REAL",
-        "doji": "INTEGER",
-        "hammer": "INTEGER",
-        "engulfing": "INTEGER",
-        "vwap": "REAL",
-    }
-
-    for column, column_type in columns.items():
-        try:
-            cursor.execute(f"ALTER TABLE intraday_data ADD COLUMN {column} {column_type}")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-
     conn.commit()
     conn.close()
 
@@ -79,7 +68,6 @@ def fetch_intraday_data(symbol, interval="1min"):
         print(f"No intraday data found for {symbol}. Full response: {data}")
         return None
 
-
     return data["Time Series (1min)"]
 
 # Save data to the database
@@ -88,103 +76,24 @@ def save_to_database(symbol, intraday_data):
     cursor = conn.cursor()
 
     for datetime_str, values in intraday_data.items():
-        cursor.execute("""
-            INSERT OR IGNORE INTO intraday_data (symbol, datetime, open, high, low, close, volume)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            symbol,
-            datetime_str,
-            float(values["1. open"]),
-            float(values["2. high"]),
-            float(values["3. low"]),
-            float(values["4. close"]),
-            int(values["5. volume"])
-        ))
-
-    conn.commit()
-    conn.close()
-
-# Compute indicators for a specific symbol
-def compute_indicators(symbol):
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    df = pd.read_sql_query(f"""
-        SELECT * FROM intraday_data WHERE symbol = '{symbol}' ORDER BY datetime ASC
-    """, conn)
-
-    if df.empty:
-        print(f"No data available for {symbol} to compute indicators.")
-        conn.close()
-        return
-
-    # Ensure proper data types
-    df['close'] = pd.to_numeric(df['close'], errors='coerce')
-    df['open'] = pd.to_numeric(df['open'], errors='coerce')
-    df['high'] = pd.to_numeric(df['high'], errors='coerce')
-    df['low'] = pd.to_numeric(df['low'], errors='coerce')
-    df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
-    df.dropna(inplace=True)
-
-    # Compute EMAs
-    df['ema_8'] = df['close'].ewm(span=8, adjust=False).mean()
-    df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
-    df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
-
-    # Compute RSI
-    delta = df['close'].diff()
-    gain = delta.where(delta > 0, 0).rolling(window=14).mean()
-    loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
-    rs = gain / loss
-    df['rsi_14'] = 100 - (100 / (1 + rs))
-
-    # Compute MACD
-    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
-    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
-    df['macd'] = ema_12 - ema_26
-    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-
-    # Compute candlestick patterns
-    df = compute_candlestick_patterns(df)
-
-    # Compute VWAP
-    df = compute_vwap(df)
-
-    print("Indicators computed for:", symbol)
-    print(df[["datetime", "ema_8", "ema_21", "ema_50", "rsi_14", "macd", "macd_signal", "doji", "hammer", "engulfing", "vwap"]].head())
-
-    # Update database
-    for _, row in df.iterrows():
         try:
             cursor.execute("""
-                UPDATE intraday_data
-                SET ema_8 = ?, ema_21 = ?, ema_50 = ?, rsi_14 = ?, macd = ?, macd_signal = ?, doji = ?, hammer = ?, engulfing = ?, vwap = ?
-                WHERE symbol = ? AND datetime = ?
+                INSERT OR IGNORE INTO intraday_data (symbol, datetime, open, high, low, close, volume)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
-                row['ema_8'], row['ema_21'], row['ema_50'], row['rsi_14'], row['macd'], row['macd_signal'],
-                int(row['doji']), int(row['hammer']), int(row['engulfing']), row['vwap'],
-                symbol, row['datetime']
+                symbol,
+                datetime_str,
+                float(values["1. open"]),
+                float(values["2. high"]),
+                float(values["3. low"]),
+                float(values["4. close"]),
+                int(values["5. volume"])
             ))
         except Exception as e:
-            print(f"Error updating {symbol} at {row['datetime']}: {e}")
+            print(f"Error saving data for {symbol} at {datetime_str}: {e}")
 
     conn.commit()
     conn.close()
-
-
-def compute_candlestick_patterns(df):
-    df['doji'] = (abs(df['open'] - df['close']) / (df['high'] - df['low'])) < 0.1
-    df['hammer'] = ((df['high'] - df['low']) > 2 * abs(df['open'] - df['close'])) & \
-                   ((df['close'] - df['low']) / (.001 + df['high'] - df['low']) > 0.6) & \
-                   ((df['open'] - df['low']) / (.001 + df['high'] - df['low']) > 0.6)
-    df['engulfing'] = ((df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & \
-                       (df['close'] > df['open'].shift(1)) & (df['open'] < df['close'].shift(1))) | \
-                      ((df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & \
-                       (df['close'] < df['open'].shift(1)) & (df['open'] > df['close'].shift(1)))
-    return df
-
-def compute_vwap(df):
-    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
-    return df
 
 # Update intraday data for multiple symbols
 def update_intraday_data():
@@ -198,12 +107,17 @@ def update_intraday_data():
     tickers_df = pd.read_csv(TICKERS_CSV)
     symbols = tickers_df["Symbol"].dropna().tolist()
 
+    if not symbols:
+        print("No symbols found in tickers.csv.")
+        return
+
     for symbol in symbols:
         print(f"Fetching intraday data for {symbol}...")
         intraday_data = fetch_intraday_data(symbol)
         if intraday_data:
             save_to_database(symbol, intraday_data)
-            compute_indicators(symbol)  # Compute indicators after fetching data
+        else:
+            print(f"Skipping {symbol} due to API data issue.")
         sleep(15)  # To avoid hitting API rate limits
 
 if __name__ == "__main__":
