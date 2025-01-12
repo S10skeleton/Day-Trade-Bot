@@ -83,3 +83,13 @@ export const fetchLogs = async () => {
         throw error;
     }
 };
+
+export const getTrainingStatus = async () => {
+    try {
+        const response = await axios.get(`${API_BASE}/training-status`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching training status:", error.message);
+        throw error;
+    }
+};
