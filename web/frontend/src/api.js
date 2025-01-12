@@ -93,3 +93,36 @@ export const getTrainingStatus = async () => {
         throw error;
     }
 };
+
+// Delete the training model
+export const deleteModel = async () => {
+    try {
+        const response = await axios.delete(`${API_BASE}/delete-model`);
+        return response.data;
+    } catch (error) {
+        console.error("Error deleting model:", error.message);
+        throw error;
+    }
+};
+
+// Wipe logs
+export const wipeLogs = async () => {
+    try {
+        const response = await axios.delete(`${API_BASE}/wipe-logs`);
+        return response.data;
+    } catch (error) {
+        console.error("Error wiping logs:", error.message);
+        throw error;
+    }
+};
+
+export const updateStockData = async () => {
+    try {
+        const response = await axios.post(`${API_BASE}/update-stock-data`);
+        return response.data;
+    } catch (error) {
+        console.error("Error updating stock data:", error.message);
+        throw error;
+    }
+};
+

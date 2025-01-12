@@ -1,4 +1,4 @@
-# Day-Trade-Bot# Day-Trade-Bot
+# Day-Trade-Bot
 
 ## Overview
 Day-Trade-Bot is an AI-driven stock trading bot designed for day trading in financial markets. Leveraging advanced machine learning algorithms and technical indicators, the bot automates decision-making for buying, selling, or holding stocks. Initially focused on paper trading for testing and optimization, the bot is designed to integrate with real-time broker APIs for live trading.
