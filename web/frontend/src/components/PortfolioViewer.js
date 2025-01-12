@@ -1,109 +1,77 @@
 import React, { useEffect, useState } from "react";
+import { getPortfolio } from "../api";
 import Plot from "react-plotly.js";
+// import "../App.css";
+
 
 const PortfolioViewer = ({ darkMode }) => {
-    const [actionLogs, setActionLogs] = useState([]);
-    const [error, setError] = useState("");
+  const [portfolio, setPortfolio] = useState(null);
+  const [error, setError] = useState("");
 
-    useEffect(() => {
-        fetchActionLogs();
-    }, []);
+  useEffect(() => {
+    fetchPortfolio();
+  }, []);
 
-    const fetchActionLogs = async () => {
-        try {
-            const response = await fetch("/action-logs");
-            const rawText = await response.text();
-            console.log("Raw response:", rawText); // Debugging the response
-    
-            let data = [];
-            try {
-                data = JSON.parse(rawText); // Attempt to parse as JSON
-            } catch (parseError) {
-                console.error("Failed to parse JSON:", parseError);
-                setError("Invalid data format from the server.");
-                return;
-            }
-    
-            // Validate and filter logs
-            const validLogs = data.filter(
-                (log) =>
-                    log.timestamp &&
-                    log.action &&
-                    typeof log.value === "number"
-            );
-    
-            setActionLogs(validLogs);
-    
-            if (!validLogs.length) {
-                setError("No valid logs found in the server response.");
-            }
-        } catch (fetchError) {
-            console.error("Failed to fetch action logs:", fetchError);
-            setError("Unable to fetch action logs. Please check the server.");
-        }
-    };
-    
-
-    if (error) {
-        return <p>{error}</p>;
+  const fetchPortfolio = async () => {
+    try {
+      const data = await getPortfolio();
+      setPortfolio(data);
+    } catch (err) {
+      console.error("Failed to fetch portfolio:", err);
+      setError("No portfolio data available. Run a training session first.");
     }
+  };
 
-    if (!actionLogs.length) {
-        return <p>Loading real-world stats...</p>;
-    }
+  if (error) {
+    return <p>{error}</p>;
+  }
 
-    const actionTimestamps = actionLogs.map((log) => log.timestamp);
-    const budgets = actionLogs.map((log) => log.value);
-    const portfolioValues = actionLogs.map((log) => log.value);
+  if (!portfolio) {
+    return <p>Loading portfolio...</p>;
+  }
 
-    return (
-        <div>
-            <h2>Real-World Stats</h2>
-            <Plot
-                data={[
-                    {
-                        x: actionTimestamps,
-                        y: budgets,
-                        type: "scatter",
-                        mode: "lines+markers",
-                        marker: { color: "green" },
-                        name: "Budget Over Time",
-                    },
-                    {
-                        x: actionTimestamps,
-                        y: portfolioValues,
-                        type: "scatter",
-                        mode: "lines+markers",
-                        marker: { color: "blue" },
-                        name: "Portfolio Value",
-                    },
-                ]}
-                layout={{
-                    plot_bgcolor: darkMode ? "#121212" : "#ffffff",
-                    paper_bgcolor: darkMode ? "#121212" : "#ffffff",
-                    font: { color: darkMode ? "#e0e0e0" : "#000000" },
-                    title: {
-                        text: "Portfolio Value Over Time",
-                        font: { color: darkMode ? "#e0e0e0" : "#000000" },
-                    },
-                    xaxis: { color: darkMode ? "#e0e0e0" : "#000000" },
-                    yaxis: { color: darkMode ? "#e0e0e0" : "#000000" },
-                }}
-            />
-            <div style={{ maxHeight: "300px", overflowY: "scroll", border: "1px solid #ccc", padding: "10px" }}>
-                <h3>Action Logs</h3>
-                <ul>
-                    {actionLogs.map((log, index) => (
-                        <li key={index}>
-                            <strong>Timestamp:</strong> {log.timestamp} | 
-                            <strong> Action:</strong> {log.action} | 
-                            <strong> Value:</strong> ${log.value.toFixed(2)}
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        </div>
-    );
+  const steps = portfolio.stocks.map((stock) => stock.Step);
+  const portfolioValues = portfolio.stocks.map(
+    (stock) => stock["Portfolio Value"]
+  );
+
+  return (
+    <div>
+      <h2>Portfolio</h2>
+      <p>Total Value: ${portfolio.total_value.toFixed(2)}</p>
+      <div className="chart-container">
+        <Plot
+          className="chart"
+          data={[
+            {
+              x: steps,
+              y: portfolioValues,
+              type: "scatter",
+              mode: "lines+markers",
+              marker: { color: darkMode ? "lightblue" : "blue" },
+              name: "Portfolio Value",
+            },
+          ]}
+          layout={{
+            width: 1500,
+            height: 400,
+            plot_bgcolor: darkMode ? "#121212" : "#ffffff",
+            paper_bgcolor: darkMode ? "#121212" : "#ffffff",
+            font: { color: darkMode ? "#e0e0e0" : "#000000" },
+            title: {
+              text: "Portfolio Value Over Time",
+              font: { color: darkMode ? "#e0e0e0" : "#000000" },
+            },
+            xaxis: { title: "Steps", color: darkMode ? "#e0e0e0" : "#000000" },
+            yaxis: {
+              title: "Portfolio Value",
+              color: darkMode ? "#e0e0e0" : "#000000",
+            },
+          }}
+        />
+      </div>
+    </div>
+  );
 };
 
 export default PortfolioViewer;

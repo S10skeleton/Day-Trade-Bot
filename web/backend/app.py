@@ -3,15 +3,21 @@ from flask_cors import CORS  # Import Flask-CORS
 import os
 import subprocess
 import pandas as pd
+import threading
+import uuid
+
+
+active_trainings = []
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all routes
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 # Paths
 APPLICATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../application'))
 TICKERS_FILE = os.path.join(APPLICATION_DIR, 'tickers.csv')
-TRADE_LOG = os.path.abspath(os.path.join(os.path.dirname(__file__), 'trade_log.txt'))
+TRADE_LOG = os.path.join(os.path.dirname(__file__), 'trade_log.txt')
+
 
 # Routes...
 
@@ -71,88 +77,61 @@ def manage_stocks():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
         
-@app.route('/action-logs', methods=['GET'])
-def get_action_logs():
-    """Fetch logs from actions_log.csv, converting from trade_log.txt if necessary."""
-    ACTION_LOG = os.path.join(APPLICATION_DIR, 'actions_log.csv')
-    TRADE_LOG = os.path.join(APPLICATION_DIR, 'trade_log.txt')
-
-    # Convert trade_log.txt to actions_log.csv if missing
-    if not os.path.exists(ACTION_LOG):
-        if os.path.exists(TRADE_LOG):
-            try:
-                with open(TRADE_LOG, "r") as infile, open(ACTION_LOG, "w", newline="") as outfile:
-                    reader = pd.read_csv(infile)
-                    writer = pd.DataFrame(reader)
-                    writer.to_csv(outfile, index=False)
-            except Exception as e:
-                return jsonify({"error": f"Failed to convert trade_log.txt to actions_log.csv: {e}"}), 500
-        else:
-            return jsonify([])  # No logs available
-
-    # Read and return the actions_log.csv
-    try:
-        logs = []
-        with open(ACTION_LOG, "r") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                logs.append({
-                    "timestamp": row.get("Step", ""),
-                    "action": row.get("Action", ""),
-                    "price": float(row.get("Price", 0)),
-                    "value": float(row.get("Portfolio Value", 0)),
-                })
-        return jsonify(logs)
-    except Exception as e:
-        return jsonify({"error": f"Error reading actions_log.csv: {e}"}), 500
-
-
-
 
 
 
 @app.route('/stream-logs', methods=['GET'])
 def stream_logs():
-    """Stream training logs to the frontend."""
+    """Stream logs without triggering training."""
+    log_file = os.path.join(APPLICATION_DIR, "trade_log.txt")
+    if not os.path.exists(log_file):
+        return Response("Log file not found.", status=404, mimetype="text/plain")
+
     def generate():
-        process = subprocess.Popen(
-            ["python", os.path.join(APPLICATION_DIR, "test_ppo.py")],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        try:
-            for line in process.stdout:
-                yield f"data:{line}\n\n"
-            for line in process.stderr:
-                yield f"data:{line}\n\n"
-        except GeneratorExit:
-            process.terminate()
-            print("Client disconnected from stream.")
-    
-    response = Response(generate(), mimetype='text/event-stream')
-    # Add CORS headers explicitly
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    response.headers.add("Access-Control-Allow-Methods", "GET")
-    response.headers.add("Access-Control-Allow-Headers", "Content-Type")
-    return response
+        with open(log_file, "r") as f:
+            while True:
+                line = f.readline()
+                if not line:
+                    break
+                yield f"data: {line}\n\n"
+
+    return Response(generate(), mimetype="text/event-stream")
+
 
 
 
 # Trigger Training
 @app.route('/train', methods=['POST'])
 def train_model():
-    """Trigger model training by running test_ppo.py."""
-    try:
-        result = subprocess.run(
-            ["python", os.path.join(APPLICATION_DIR, "test_ppo.py")],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        return jsonify({"message": "Training complete", "output": result.stdout})
-    except subprocess.CalledProcessError as e:
-        return jsonify({"error": f"Training failed: {e.stderr}"}), 500
+    """Trigger model training."""
+    session_id = str(uuid.uuid4())  # Unique session ID
+
+    if session_id in active_trainings:
+        return jsonify({"error": "Training session already active"}), 400
+
+    active_trainings.append(session_id)
+
+    def train():
+        try:
+            subprocess.run(
+                ["python", os.path.join(APPLICATION_DIR, "test_ppo.py"), "--train"],
+                check=True,
+                text=True,
+            )
+        except Exception as e:
+            print(f"Error during training: {e}")
+        finally:
+            active_trainings.remove(session_id)
+
+    # Start training in a background thread
+    threading.Thread(target=train, daemon=True).start()
+    return jsonify({"message": "Training started", "session_id": session_id}), 200
+
+@app.route('/training-status', methods=['GET'])
+def get_training_status():
+    """Monitor active training sessions."""
+    return jsonify({"active_sessions": len(active_trainings), "sessions": active_trainings})
+
 
 # Portfolio Data
 @app.route('/portfolio', methods=['GET'])
@@ -171,6 +150,7 @@ def get_portfolio():
         return jsonify(portfolio)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     
 @app.route('/tensorboard', methods=['GET'])
 def serve_tensorboard():
@@ -181,3 +161,42 @@ def serve_tensorboard():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+    # @app.route('/action-logs', methods=['GET'])
+# def get_action_logs():
+#     """Fetch logs from actions_log.csv, converting from trade_log.txt if necessary."""
+#     ACTION_LOG = os.path.join(APPLICATION_DIR, 'actions_log.csv')
+#     TRADE_LOG = os.path.join(APPLICATION_DIR, 'trade_log.txt')
+
+#     # Convert trade_log.txt to actions_log.csv if missing
+#     if not os.path.exists(ACTION_LOG):
+#         if os.path.exists(TRADE_LOG):
+#             try:
+#                 with open(TRADE_LOG, "r") as infile, open(ACTION_LOG, "w", newline="") as outfile:
+#                     reader = pd.read_csv(infile)
+#                     writer = pd.DataFrame(reader)
+#                     writer.to_csv(outfile, index=False)
+#             except Exception as e:
+#                 return jsonify({"error": f"Failed to convert trade_log.txt to actions_log.csv: {e}"}), 500
+#         else:
+#             return jsonify([])  # No logs available
+
+#     # Read and return the actions_log.csv
+#     try:
+#         logs = []
+#         with open(ACTION_LOG, "r") as file:
+#             reader = csv.DictReader(file)
+#             for row in reader:
+#                 logs.append({
+#                     "timestamp": row.get("Step", ""),
+#                     "action": row.get("Action", ""),
+#                     "price": float(row.get("Price", 0)),
+#                     "value": float(row.get("Portfolio Value", 0)),
+#                 })
+#         return jsonify(logs)
+#     except Exception as e:
+#         return jsonify({"error": f"Error reading actions_log.csv: {e}"}), 500
+
+
+
+

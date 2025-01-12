@@ -17,3 +17,6 @@ venv/
 
 # Ignore environment files
 *.env
+
+# Ignore TensorBoard logs
+ppo_tensorboard/

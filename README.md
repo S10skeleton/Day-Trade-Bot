@@ -82,7 +82,7 @@ python application/test_ppo.py
 Step 4: Monitor Training with TensorBoard
 Start the TensorBoard server:
 ```
-tensorboard --logdir=application/ppo_tensorboard/
+tensorboard --logdir=ppo_tensorboard/
 ```
 Open http://localhost:6006 in your browser to view training metrics.
 

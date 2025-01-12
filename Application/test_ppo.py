@@ -39,27 +39,44 @@ def load_data(stock_symbols):
 
 # Initialize and train the PPO model
 def train_model(env):
-    if os.path.exists(MODEL_FILE):
-        print("Loading existing model...")
-        model = PPO.load(MODEL_FILE, env=env)
-    else:
-        print("No saved model found. Creating a new model...")
-        model = PPO(
-            "MlpPolicy",
-            env,
-            verbose=1,
-            device="cpu",  # Use "cuda" if GPU is available
-            learning_rate=0.0001,
-            n_steps=4096,  # Increase rollout steps
-            batch_size=256,  # Larger batch size
-            gamma=0.99,
-            tensorboard_log=os.path.abspath("./Application/ppo_tensorboard/")  # Unified directory
-        )
-    print("Starting training...")
-    model.learn(total_timesteps=1000, tb_log_name="PPO_run")
-    model.save(MODEL_FILE)
-    print("Training complete. Model saved as ppo_day_trade_bot.zip")
-    return model
+    try:
+        print("Starting train_model function...")
+        
+        # Check if the model file exists
+        if os.path.exists(MODEL_FILE):
+            print(f"Model file found at {MODEL_FILE}. Loading existing model...")
+            model = PPO.load(MODEL_FILE, env=env)
+        else:
+            print(f"No saved model found at {MODEL_FILE}. Creating a new model...")
+            model = PPO(
+                "MlpPolicy",
+                env,
+                verbose=1,
+                device="cpu",  # Use "cuda" if GPU is available
+                learning_rate=0.0001,
+                n_steps=4096,  # Increase rollout steps
+                batch_size=256,  # Larger batch size
+                gamma=0.99,
+                tensorboard_log="./ppo_tensorboard/"
+            )
+            print("New model created successfully.")
+        
+        print("Starting training process...")
+        
+        # Train the model
+        model.learn(total_timesteps=500, tb_log_name="PPO_run")
+        print("Training process completed successfully.")
+        
+        # Save the trained model
+        model.save(MODEL_FILE)
+        print(f"Model saved successfully as {MODEL_FILE}.")
+        
+        return model
+    
+    except Exception as e:
+        print(f"An error occurred in train_model: {str(e)}")
+        raise
+
 
 # Visualize and test the trained model
 def test_model(env, model):
@@ -132,13 +149,23 @@ def test_model(env, model):
 
 # Main function
 if __name__ == "__main__":
-    try:
-        stock_symbols = get_stock_symbols()
-        data = load_data(stock_symbols)
-    except (FileNotFoundError, ValueError) as e:
-        print(f"Error: {e}")
-        exit()
+    import argparse
 
-    env = TradingEnvironment(data, stocks=stock_symbols)
-    model = train_model(env)
-    test_model(env, model)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train", action="store_true", help="Run training and testing")
+    args = parser.parse_args()
+
+    if args.train:
+        try:
+            stock_symbols = get_stock_symbols()
+            data = load_data(stock_symbols)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error: {e}")
+            exit()
+
+        env = TradingEnvironment(data, stocks=stock_symbols)
+        model = train_model(env)
+        test_model(env, model)
+    else:
+        print("No action specified. Use --train to start training.")
+
